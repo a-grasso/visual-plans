@@ -1,5 +1,5 @@
 import React, {
-  createContext, useContext, useRef, useState, useLayoutEffect, useEffect, useCallback, Children, isValidElement,
+  createContext, useContext, useRef, useState, useLayoutEffect, useEffect, useCallback, useMemo, Children, isValidElement,
 } from 'react'
 import { Screen } from './wireframe.jsx'
 
@@ -32,8 +32,10 @@ export function DesignBoard({ title, children }) {
   const connectors = kids.filter((c) => isValidElement(c) && c.type === Connector)
   const flow = kids.filter((c) => !(isValidElement(c) && c.type === Connector))
 
+  const ctxValue = useMemo(() => ({ register }), [register])
+
   return (
-    <BoardCtx.Provider value={{ register }}>
+    <BoardCtx.Provider value={ctxValue}>
       <div className="vp-board" ref={boardRef}>
         {title && <div className="vp-board-title">{title}</div>}
         <ConnectorLayer boardRef={boardRef} nodes={nodes.current} connectors={connectors} />

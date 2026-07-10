@@ -1,0 +1,209 @@
+---
+title: Wire the account-enrichment runner
+status: Draft
+owner: backend
+summary: Connect the research + extraction ports behind one runner that produces an AccountProfile per account. Example plan — exercises every block type. All names are fictional.
+---
+
+## Objective
+
+Deliver a single `EnrichmentRunner` that takes an account id, drives the
+research → extract → detect → score pipeline, and persists one `AccountProfile`.
+**Done** means: given a seeded account, one call yields a validated profile row
+and a green end-to-end test.
+
+This plan touches `server/enrichment/` and reuses the existing ports in
+`server/llm/` — it adds the glue, not new model integrations.
+
+<Callout tone="decision" title="Committed approach">
+
+Runner is a **plain orchestrator**, not a framework. It sequences existing ports
+and writes through the persistence layer. No new abstraction until a second
+pipeline needs it.
+
+</Callout>
+
+## Approach
+
+<Columns>
+  <Column label="Current">
+    Ports exist in isolation (`ResearchPort`, `ExtractionPort`) and are exercised
+    only by opt-in live tests. Nothing wires them together.
+  </Column>
+  <Column label="Target">
+    `EnrichmentRunner.run(accountId)` calls each port in order, maps outputs to
+    `AccountProfile`, and persists it. Callers get one entry point.
+  </Column>
+</Columns>
+
+### Pipeline shape
+
+<Diagram mermaid={`flowchart LR
+  A[accountId] --> R[research port]
+  R --> X[extraction port]
+  X --> D[detect topics]
+  D --> S[score + rank]
+  S --> P[(AccountProfile)]`} />
+
+<Callout tone="warn" title="Hard-to-reverse bet">
+
+The persisted profile shape is a public contract for the dashboard. Lock the
+JSON envelope now (see Data model); topic scoring internals can change later.
+
+</Callout>
+
+## Data model
+
+<DataModel
+  entities={[
+    { name: 'AccountProfile', fields: [
+      { name: 'accountId', type: 'String' },
+      { name: 'signals', type: 'List<Signal>' },
+      { name: 'generatedAt', type: 'Instant' },
+      { name: 'schemaVersion', type: 'Int' },
+    ]},
+    { name: 'Signal', fields: [
+      { name: 'topic', type: 'Topic' },
+      { name: 'score', type: 'Double' },
+      { name: 'triggeredBy', type: 'Evidence' },
+    ]},
+  ]}
+  relations={[{ from: 'AccountProfile', to: 'Signal', label: '1..*' }]}
+/>
+
+## Files touched
+
+<FileTree
+  paths={[
+    { path: 'server/enrichment/EnrichmentRunner.kt', status: 'new', note: 'the orchestrator' },
+    { path: 'server/enrichment/ProfileMapper.kt', status: 'new' },
+    { path: 'server/enrichment/ProfileRepository.kt', status: 'changed', note: 'add upsert' },
+    { path: 'server/llm/ResearchPort.kt', status: 'changed', note: 'reused, no signature change' },
+  ]}
+/>
+
+### The runner itself
+
+<AnnotatedCode
+  file="server/enrichment/EnrichmentRunner.kt"
+  lang="kotlin"
+  code={`class EnrichmentRunner(
+  private val research: ResearchPort,
+  private val extraction: ExtractionPort,
+  private val repo: ProfileRepository,
+) {
+  suspend fun run(accountId: String): AccountProfile {
+    val dossier = research.gather(accountId)
+    val topics = extraction.extract(dossier)
+    val profile = ProfileMapper.toProfile(accountId, topics)
+    return repo.upsert(profile)
+  }
+}`}
+  annotations={[
+    { lines: '2-4', label: 'Injected ports', note: 'Constructor DI — reuses existing port interfaces, no new bindings.' },
+    { lines: '7-8', label: 'Sequence', note: 'Research then extract; both already covered by live tests.' },
+    { lines: '10', label: 'Persist', note: 'upsert is the one new repository method.' },
+  ]}
+/>
+
+### Throwaway snippet
+
+<Code lang="kotlin" title="wiring in the module" code={`single { EnrichmentRunner(get(), get(), get()) }`} />
+
+### What changes in the repository
+
+<Diff lang="kotlin" title="ProfileRepository.kt" code={` interface ProfileRepository {
+     fun find(accountId: String): AccountProfile?
+-    fun save(p: AccountProfile)
++    fun upsert(p: AccountProfile): AccountProfile
+ }`} />
+
+## API surface
+
+<ApiEndpoint
+  method="POST"
+  path="/v1/accounts/{id}/enrich"
+  summary="Trigger a synchronous enrichment run and return the profile."
+  request={{ force: false }}
+  response={{ accountId: 'acme', signals: 4, schemaVersion: 2 }}
+/>
+
+<Tabs>
+  <Tab label="OpenAPI">
+    <OpenApiSpec spec={{
+      info: { title: 'Enrichment API', version: '1' },
+      paths: {
+        '/v1/accounts/{id}/enrich': { post: { summary: 'Run enrichment' } },
+        '/v1/accounts/{id}/profile': { get: { summary: 'Read latest profile' } },
+      },
+    }} />
+  </Tab>
+  <Tab label="Example payload">
+    <JsonExplorer data={{
+      accountId: 'acme',
+      schemaVersion: 2,
+      signals: [
+        { topic: 'capacity-expansion', score: 0.82, triggeredBy: { kind: 'press-release', date: '2026-05' } },
+        { topic: 'reshoring', score: 0.44 },
+      ],
+    }} />
+  </Tab>
+</Tabs>
+
+## Rollout
+
+<Checklist items={[
+  { id: 'a', label: 'Add upsert to ProfileRepository + SQLite impl', done: true },
+  { id: 'b', label: 'ProfileMapper with schemaVersion=2 envelope', done: false },
+  { id: 'c', label: 'EnrichmentRunner + module wiring', done: false },
+  { id: 'd', label: 'End-to-end test against a seeded account', done: false },
+]} />
+
+## Risks
+
+<Callout tone="note" title="Assumption">
+
+Research + extraction latency is acceptable for a synchronous endpoint at this
+scale (< 30s). If not, the runner moves behind a job queue — out of scope here.
+
+</Callout>
+
+## Escape hatch demo
+
+<CustomHtml html={`<div style="padding:14px;border:1px dashed var(--wf-line);border-radius:10px;background:var(--wf-card);color:var(--wf-ink)">
+  Bounded <code>custom-html</code> fragment, themed via <code>--wf-*</code> tokens so it reads in dark mode.
+</div>`} />
+
+## Verification
+
+Run the seeded end-to-end: `mvn -pl server/enrichment test -Dtest=EnrichmentRunnerE2E`.
+Asserts one profile row with `schemaVersion=2` and `signals.isNotEmpty()`.
+
+<QuestionForm
+  title="Open Questions"
+  questions={[
+    {
+      id: 'sync',
+      title: 'Synchronous endpoint or fire-and-forget job?',
+      mode: 'single',
+      options: [
+        { id: 'sync', label: 'Synchronous', detail: 'Simplest; fine at this scale.', recommended: true },
+        { id: 'job', label: 'Background job', detail: 'Needed only if latency exceeds ~30s.' },
+      ],
+    },
+    {
+      id: 'ver',
+      title: 'Which consumers must pin schemaVersion?',
+      mode: 'multi',
+      options: [
+        { id: 'dash', label: 'Dashboard' },
+        { id: 'export', label: 'Warehouse export' },
+      ],
+    },
+    {
+      id: 'notes',
+      title: 'Any constraint on run frequency per account?',
+      mode: 'freeform',
+    },
+  ]}
+/>

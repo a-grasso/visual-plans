@@ -1,0 +1,82 @@
+---
+title: "Recap: wire the account-enrichment runner"
+status: Review
+owner: backend
+kind: recap
+summary: Summary of the diff that implemented EnrichmentRunner — what changed, the contract delta, and one thing to confirm. Example recap; all names are fictional.
+---
+
+## What changed
+
+Implemented `EnrichmentRunner` end to end: it sequences the existing research and
+extraction ports and persists one `AccountProfile` per account. One new endpoint
+exposes it. The repository's `save` became an `upsert`.
+
+<Callout tone="warn" title="Breaking contract change">
+
+`ProfileRepository.save` was replaced by `upsert` (returns the persisted
+profile). Any caller of `save` must migrate — grep confirms only the new runner
+and one test used it.
+
+</Callout>
+
+## Files
+
+<FileTree paths={[
+  { path: 'server/enrichment/EnrichmentRunner.kt', status: 'new', note: 'the orchestrator' },
+  { path: 'server/enrichment/ProfileMapper.kt', status: 'new', note: 'topics → schemaVersion=2 envelope' },
+  { path: 'server/enrichment/ProfileRepository.kt', status: 'changed', note: 'save → upsert' },
+  { path: 'server/enrichment/SqliteProfileRepository.kt', status: 'changed' },
+  { path: 'server/api/EnrichmentRoutes.kt', status: 'new', note: 'POST /enrich' },
+]} />
+
+## The contract delta
+
+<Columns>
+  <Column label="Before">
+    <Code lang="kotlin" code={`interface ProfileRepository {\n  fun find(id: String): AccountProfile?\n  fun save(p: AccountProfile)\n}`} />
+  </Column>
+  <Column label="After">
+    <Code lang="kotlin" code={`interface ProfileRepository {\n  fun find(id: String): AccountProfile?\n  fun upsert(p: AccountProfile): AccountProfile\n}`} />
+  </Column>
+</Columns>
+
+## Key hunk
+
+<AnnotatedCode
+  file="server/enrichment/EnrichmentRunner.kt"
+  lang="kotlin"
+  code={`suspend fun run(accountId: String): AccountProfile {\n  val dossier = research.gather(accountId)\n  val topics = extraction.extract(dossier)\n  val profile = ProfileMapper.toProfile(accountId, topics)\n  return repo.upsert(profile)\n}`}
+  annotations={[
+    { lines: '2-3', label: 'Reused ports', note: 'No changes to the port interfaces — pure orchestration.' },
+    { lines: '5', label: 'New behavior', note: 'upsert returns the persisted row so the endpoint can echo it.' },
+  ]}
+/>
+
+## New endpoint
+
+<ApiEndpoint
+  method="POST"
+  path="/v1/accounts/{id}/enrich"
+  summary="Synchronous run; returns the persisted profile."
+  response={{ accountId: 'acme', schemaVersion: 2, signals: 4 }}
+/>
+
+## Verification run
+
+`mvn -pl server/enrichment,server/api test` — green, including the new
+`EnrichmentRunnerE2E` against a seeded account (asserts one row, `schemaVersion=2`,
+non-empty signals).
+
+<QuestionForm
+  title="To confirm before merge"
+  questions={[{
+    id: 'sync',
+    title: 'Ship as a synchronous endpoint for now?',
+    mode: 'single',
+    options: [
+      { id: 'yes', label: 'Yes — synchronous', detail: 'Runs < 30s on the reference accounts.', recommended: true },
+      { id: 'job', label: 'No — move behind a job', detail: 'Defer unless latency becomes a problem.' },
+    ],
+  }]}
+/>

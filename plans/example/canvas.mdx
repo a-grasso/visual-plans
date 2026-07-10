@@ -1,0 +1,58 @@
+---
+kind: canvas
+---
+
+<DesignBoard title="Enrichment review — operator surface">
+  <Artboard id="list" label="Accounts (current)">
+    <Screen surface="browser" url="app/accounts" html={`
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;height:100%">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h1>Accounts</h1>
+          <button class="primary"><span data-icon="plus"></span> Enrich all</button>
+        </div>
+        <div style="display:flex;gap:6px">
+          <span class="wf-pill accent">All 128</span>
+          <span class="wf-pill">Enriched 40</span>
+          <span class="wf-pill">Stale 12</span>
+        </div>
+        <div class="wf-card" style="display:flex;flex-direction:column;gap:0;padding:0">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1.4px solid var(--wf-line)">
+            <div style="flex:1"><strong>Acme Robotics</strong><br/><small>Manufacturing · US</small></div>
+            <span class="wf-pill accent">Enriched</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px">
+            <div style="flex:1"><strong>Globex Corp</strong><br/><small>Logistics · US</small></div>
+            <span class="wf-pill">Queued</span>
+          </div>
+        </div>
+      </div>`} />
+    <Annotation head="Entry point" placement="right">
+      Operator triggers enrichment from the list. Row status reflects the run
+      pipeline state.
+    </Annotation>
+  </Artboard>
+
+  <Artboard id="detail" label="Profile (after run)">
+    <Screen surface="browser" url="app/accounts/acme" html={`
+      <div style="display:flex;flex-direction:column;gap:12px;padding:16px;height:100%">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span data-icon="arrowLeft"></span><h1>Acme Robotics</h1>
+        </div>
+        <div class="wf-box" style="display:flex;flex-direction:column;gap:6px">
+          <small class="wf-muted">TOP SIGNAL</small>
+          <strong>Expanding assembly line — capacity +30%</strong>
+          <p class="wf-muted">Confidence 0.82 · triggered_by press release 2026-05</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <span class="wf-chip"><span data-icon="check"></span> 4 topics</span>
+          <span class="wf-chip">2 recommendations</span>
+        </div>
+      </div>`} />
+    <Annotation head="Result view" placement="right">
+      AccountProfile rendered read-only. Signals ranked by score; each carries
+      provenance.
+    </Annotation>
+  </Artboard>
+
+  <Connector from="list" to="detail" label="run → open" />
+</DesignBoard>

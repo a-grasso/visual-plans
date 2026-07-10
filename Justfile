@@ -4,10 +4,14 @@
 default:
     @just --list
 
-# install renderer deps + wire skills into a project (idempotent)
-#   just install ~/Projects/my-project
-install project="":
-    ./install.sh {{project}}
+# install skills user-global (~/.claude/skills) + renderer deps (idempotent)
+install:
+    ./install.sh
+
+# install skills into one project's .claude/skills (gitignored, per-machine)
+#   just install-project ~/Projects/my-project
+install-project project:
+    ./install.sh --project {{project}}
 
 # run the renderer (uses the installed default plans dir; override with dir=)
 #   just serve                       # last-installed project's plans

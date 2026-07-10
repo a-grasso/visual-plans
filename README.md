@@ -49,23 +49,36 @@ visual-plans/
 
 ## Install
 
-Clone once (private repo — uses your git/SSH auth), then wire it into a project:
+Self-bootstrapping installer (same model as reflock): clones-or-updates to
+`~/.local/share/visual-plans`, installs renderer deps, and symlinks the skills.
+Idempotent — safe to re-run.
+
+**User-global (recommended)** — skills available in every project on the machine,
+nothing machine-specific committed anywhere:
 
 ```bash
-git clone git@github.com:a-grasso/visual-plans ~/.visual-plans
-cd ~/.visual-plans
-./install.sh ~/Projects/my-project     # or: just install ~/Projects/my-project
+# once the repo is public — one line from anywhere:
+curl -fsSL https://raw.githubusercontent.com/a-grasso/visual-plans/main/install.sh | bash
+
+# from a local checkout (works now, private):
+./install.sh
 ```
 
-`install.sh <project>` is idempotent — it installs the renderer deps, symlinks
-`visual-plan` + `visual-recap` into `<project>/.claude/skills/`, and sets that
-project's `doc/plans` as the renderer's default plans dir. Re-run it per project.
-
-Once the repo is public, the same thing in one line from inside a project:
+**Into one project** — symlinks into `<project>/.claude/skills` and adds them to
+that project's `.gitignore` (so a clone stays portable; each machine re-runs it):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/a-grasso/visual-plans/main/bootstrap.sh | bash
+./install.sh --project ~/Projects/my-project
 ```
+
+Env overrides: `VISUAL_PLANS_SRC` (use an existing checkout instead of cloning),
+`VISUAL_PLANS_HOME` (clone location), `SKILLS_DIR` (global skills dir).
+
+> **Why not commit the symlinks?** A committed symlink only survives a clone if
+> its target lives inside the repo (or a submodule). An absolute symlink to an
+> external checkout dangles on every other machine. So skills install
+> per-machine (global, once) — like a tool on `PATH` — rather than being vendored
+> per repo.
 
 ## Quick start
 
@@ -86,10 +99,10 @@ runs the render self-test; `npm run build` produces a static export in `dist/`.
 
 ## Using the skills with a coding agent
 
-After `install.sh`, the skills are standard Claude Code skills in the project's
-`.claude/skills/`. In a session, invoke `/visual-plan` or `/visual-recap`; the
-skill instructs the agent to author the MDX and start the renderer pointed at
-your plans dir.
+After `install.sh`, the skills are standard Claude Code skills in
+`~/.claude/skills/` (or a project's `.claude/skills/` with `--project`). In a
+session, invoke `/visual-plan` or `/visual-recap`; the skill instructs the agent
+to author the MDX and start the renderer pointed at your plans dir.
 
 ## Attribution
 

@@ -16,8 +16,10 @@ before/after UI, contract/schema deltas, a file map, and the decisions worth
 flagging. Rendered by the same `renderer/` app; same block vocabulary.
 
 **Fully local.** No hosted service, no account, no telemetry, nothing uploaded.
-Recaps are plain MDX at `<plans-dir>/<slug>/plan.mdx`, `kind: recap` in the
-frontmatter.
+Recaps are plain MDX at `<plans-dir>/recap-<slug>/plan.mdx`, `kind: recap` in
+the frontmatter. The `recap-` prefix is what marks a recap in a directory
+listing or the renderer's sidebar (which shows the raw slug) — a bare `<slug>`
+is a `/visual-plan` instead.
 
 > Adapted from [BuilderIO/skills](https://github.com/BuilderIO/skills)
 > (`visual-recap`, MIT); hosted/collab machinery removed. See `../../LICENSE`.

@@ -17,7 +17,9 @@ deliverable is an MDX file rendered by the `renderer/` app in this repo.
 
 **Fully local.** No hosted service, no account, no telemetry, nothing uploaded.
 Plans are plain MDX at `<plans-dir>/<slug>/plan.mdx` (+ optional `canvas.mdx`),
-versioned in whatever repo they describe.
+versioned in whatever repo they describe. A bare `<slug>` marks a plan; a recap
+of already-shipped work uses `/visual-recap` instead, which prefixes its slug
+`recap-<slug>` — so `<plans-dir>` stays self-describing without opening a file.
 
 > Planning discipline and quality bars below are adapted from
 > [BuilderIO/skills](https://github.com/BuilderIO/skills) (`visual-plan`, MIT);
